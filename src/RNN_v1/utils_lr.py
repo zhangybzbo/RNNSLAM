@@ -39,7 +39,7 @@ def euler2mat(z, y, x):
   Returns:
       Rotation matrix corresponding to the euler angles -- size = [B, N, 3, 3]
   """
-  B = tf.shape(input=z)[0]
+  B = tf.shape(z)[0]
   N = 1
   #z = tf.clip_by_value(z, -np.pi, np.pi)
   #y = tf.clip_by_value(y, -np.pi, np.pi)
@@ -96,9 +96,9 @@ def rotationMatrixToEulerAngles(R) :
   sy = tf.sqrt(R[:,0,0] * R[:,0,0] +  R[:,1,0] * R[:,1,0])
   eps = tf.constant(1e-6,dtype=tf.float32,shape=sy.get_shape())
   singular = tf.less(sy, eps)
-  x = tf.expand_dims(tf.compat.v1.where(singular, tf.atan2(-R[:,1,2], R[:,1,1]), tf.atan2(R[:,2,1] , R[:,2,2])),1)
-  y = tf.expand_dims(tf.compat.v1.where(singular, tf.atan2(-R[:,2,0], sy), tf.atan2(-R[:,2,0], sy)),1)
-  z = tf.expand_dims(tf.compat.v1.where(singular, tf.constant(0,dtype=tf.float32,shape=sy.get_shape()), tf.atan2(R[:,1,0], R[:,0,0])),1)
+  x = tf.expand_dims(tf.where(singular, tf.atan2(-R[:,1,2], R[:,1,1]), tf.atan2(R[:,2,1] , R[:,2,2])),1)
+  y = tf.expand_dims(tf.where(singular, tf.atan2(-R[:,2,0], sy), tf.atan2(-R[:,2,0], sy)),1)
+  z = tf.expand_dims(tf.where(singular, tf.constant(0,dtype=tf.float32,shape=sy.get_shape()), tf.atan2(R[:,1,0], R[:,0,0])),1)
   eulerangle = tf.concat([x,y,z],axis=1)
   # for i in range(B.eval()):
   #   sy = tf.sqrt(R[i,0,0] * R[i,0,0] +  R[i,1,0] * R[i,1,0])
@@ -124,7 +124,7 @@ def rotationMatrixToEulerAngles(R) :
 def axis_angle_to_rotation_matrix(axis, angle):
 
 
-  B = tf.shape(input=angle)[0]
+  B = tf.shape(angle)[0]
   zeros = tf.zeros([B, 1, 1])
   ones  = tf.ones([B, 1, 1])
 
@@ -135,7 +135,7 @@ def axis_angle_to_rotation_matrix(axis, angle):
 
   M = tf.concat([M1, M2, M3], axis=1)
 
-  cp_axis = M-tf.transpose(a=M,perm=[0,2,1])
+  cp_axis = M-tf.transpose(M,perm=[0,2,1])
   #import pdb;pdb.set_trace()
   # ANGLE_SIN = tf.concat([tf.sin(angle),tf.sin(angle),tf.sin(angle)],axis=2)
   # ANGLE_SIN = tf.concat([ANGLE_SIN, ANGLE_SIN, ANGLE_SIN], axis=1)
@@ -172,7 +172,7 @@ def pose_vec2mat(vec,format):
   elif format=='angleaxis':
 
     axis = tf.slice(vec, [0, 3], [-1, 3])
-    angle = tf.expand_dims(tf.norm(tensor=axis,axis=1),-1)
+    angle = tf.expand_dims(tf.norm(axis,axis=1),-1)
     #import pdb;pdb.set_trace()
     # if( angle > 1.0e-6 ):
     axis /=angle
@@ -199,7 +199,7 @@ def pixel2cam(depth, pixel_coords, intrinsics, is_homogeneous=True):
   batch, height, width = depth.get_shape().as_list()
   depth = tf.reshape(depth, [batch, 1, -1])
   pixel_coords = tf.reshape(pixel_coords, [batch, 3, -1])
-  cam_coords = tf.matmul(tf.linalg.inv(intrinsics), pixel_coords) * depth
+  cam_coords = tf.matmul(tf.matrix_inverse(intrinsics), pixel_coords) * depth
   if is_homogeneous:
     ones = tf.ones([batch, 1, height*width])
     cam_coords = tf.concat([cam_coords, ones], axis=1)
@@ -228,7 +228,7 @@ def cam2pixel(cam_coords, proj):
 
   z_u = tf.reshape(z_u, [batch, height, width, 1])
   
-  return tf.transpose(a=pixel_coords, perm=[0, 2, 3, 1]),z_u
+  return tf.transpose(pixel_coords, perm=[0, 2, 3, 1]),z_u
 
 def meshgrid(batch, height, width, is_homogeneous=True):
   """Construct a 2D meshgrid.
@@ -242,8 +242,8 @@ def meshgrid(batch, height, width, is_homogeneous=True):
     x,y grid coordinates [batch, 2 (3 if homogeneous), height, width]
   """
   x_t = tf.matmul(tf.ones(shape=tf.stack([height, 1])),
-                  tf.transpose(a=tf.expand_dims(
-                      tf.linspace(-1.0, 1.0, width), 1), perm=[1, 0]))
+                  tf.transpose(tf.expand_dims(
+                      tf.linspace(-1.0, 1.0, width), 1), [1, 0]))
   y_t = tf.matmul(tf.expand_dims(tf.linspace(-1.0, 1.0, height), 1),
                   tf.ones(shape=tf.stack([1, width])))
   x_t = (x_t + 1.0) * 0.5 * tf.cast(width - 1, tf.float32)
@@ -288,7 +288,7 @@ def projective_inverse_warp(img, depth, pose, intrinsics,format='eular'):
   proj_tgt_cam_to_src_pixel = tf.matmul(intrinsics, pose)
   src_pixel_coords, src_depth = cam2pixel(cam_coords, proj_tgt_cam_to_src_pixel)
   #import pdb;pdb.set_trace()
-  rigid_flow = src_pixel_coords-tf.transpose(a=pixel_coords[:,0:2,:,:],perm=[0,2,3,1])
+  rigid_flow = src_pixel_coords-tf.transpose(pixel_coords[:,0:2,:,:],[0,2,3,1])
 
   output_img,wmask = bilinear_sampler(img, src_pixel_coords)
 
@@ -352,7 +352,7 @@ def optflow_warp(img,flowx,flowy):
   batch, height, width, _ = img.get_shape().as_list()
   pixel_coords = meshgrid(batch, height, width,is_homogeneous=False)
 
-  pixel_coords = tf.transpose(a=pixel_coords, perm=[0,2,3,1])
+  pixel_coords = tf.transpose(pixel_coords, [0,2,3,1])
   coords_x, coords_y = tf.split(pixel_coords, [1, 1], axis=3)
 
   x_n = coords_x+flowx
@@ -360,7 +360,7 @@ def optflow_warp(img,flowx,flowy):
 
   pixel_coords = tf.concat([x_n, y_n], axis=1)
   pixel_coords = tf.reshape(pixel_coords, [batch, 2, height, width])
-  src_pixel_coords = tf.transpose(a=pixel_coords, perm=[0,2,3,1])
+  src_pixel_coords = tf.transpose(pixel_coords, [0,2,3,1])
   output_img,_ = bilinear_sampler(img, src_pixel_coords)
   return output_img
 
@@ -380,14 +380,14 @@ def bilinear_sampler(imgs, coords):
   """
   def _repeat(x, n_repeats):
     rep = tf.transpose(
-        a=tf.expand_dims(tf.ones(shape=tf.stack([
+        tf.expand_dims(tf.ones(shape=tf.stack([
             n_repeats,
-        ])), 1), perm=[1, 0])
+        ])), 1), [1, 0])
     rep = tf.cast(rep, 'float32')
     x = tf.matmul(tf.reshape(x, (-1, 1)), rep)
     return tf.reshape(x, [-1])
 
-  with tf.compat.v1.name_scope('image_sampling'):
+  with tf.name_scope('image_sampling'):
     coords_x, coords_y = tf.split(coords, [1, 1], axis=3)
     inp_size = imgs.get_shape()
     coord_size = coords.get_shape()
@@ -402,8 +402,8 @@ def bilinear_sampler(imgs, coords):
     y0 = tf.floor(coords_y)
     y1 = y0 + 1
 
-    y_max = tf.cast(tf.shape(input=imgs)[1] - 1, 'float32')
-    x_max = tf.cast(tf.shape(input=imgs)[2] - 1, 'float32')
+    y_max = tf.cast(tf.shape(imgs)[1] - 1, 'float32')
+    x_max = tf.cast(tf.shape(imgs)[2] - 1, 'float32')
     zero = tf.zeros([1], dtype='float32')
 
     x0_safe = tf.clip_by_value(x0, zero, x_max)
@@ -476,14 +476,14 @@ def consistent_depth_loss(src_depth,pred_src_depth, coords):
   """
   def _repeat(x, n_repeats):
     rep = tf.transpose(
-        a=tf.expand_dims(tf.ones(shape=tf.stack([
+        tf.expand_dims(tf.ones(shape=tf.stack([
             n_repeats,
-        ])), 1), perm=[1, 0])
+        ])), 1), [1, 0])
     rep = tf.cast(rep, 'float32')
     x = tf.matmul(tf.reshape(x, (-1, 1)), rep)
     return tf.reshape(x, [-1])
 
-  with tf.compat.v1.name_scope('image_sampling'):
+  with tf.name_scope('image_sampling'):
     coords_x, coords_y = tf.split(coords, [1, 1], axis=3)
     inp_size = src_depth.get_shape()
     coord_size = coords.get_shape()
@@ -498,8 +498,8 @@ def consistent_depth_loss(src_depth,pred_src_depth, coords):
     y0 = tf.floor(coords_y)
     y1 = y0 + 1
 
-    y_max = tf.cast(tf.shape(input=src_depth)[1] - 1, 'float32')
-    x_max = tf.cast(tf.shape(input=src_depth)[2] - 1, 'float32')
+    y_max = tf.cast(tf.shape(src_depth)[1] - 1, 'float32')
+    x_max = tf.cast(tf.shape(src_depth)[2] - 1, 'float32')
     zero = tf.zeros([1], dtype='float32')
 
     x0_safe = tf.clip_by_value(x0, zero, x_max)
@@ -570,7 +570,7 @@ def depth_optflow(src_pixel_coords):
 
 
   
-  pixel_coords = tf.transpose(a=pixel_coords, perm=[0,2,3,1])
+  pixel_coords = tf.transpose(pixel_coords, [0,2,3,1])
   coords_x, coords_y = tf.split(pixel_coords, [1, 1], axis=3)
 
 

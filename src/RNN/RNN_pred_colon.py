@@ -1,11 +1,10 @@
+import tensorflow as tf
+tf.compat.v1.disable_eager_execution()
 from model import *
-import cv2
 import os, glob
 import numpy as np
 from pose_evaluation_utils import *
-import scipy
-from util import *
-import struct
+import imageio
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -30,7 +29,7 @@ class RNN_depth_pred:
         self.img_width = img_width
         self.checkpoint_dir = checkpoint_dir
         self.data_path = data_path
-        self.image = tf.placeholder(tf.float32, [1, self.img_height, self.img_width, 3])
+        self.image = tf.compat.v1.placeholder(tf.float32, [1, self.img_height, self.img_width, 3])
         self.accum_pose = np.eye(4)
 
         self.init_hidden()
@@ -45,13 +44,13 @@ class RNN_depth_pred:
     def init_hidden(self):
 
         self.hidden_state_tf = [
-                                tf.placeholder(tf.float32, [1, 108, 135, 64]),
-                                tf.placeholder(tf.float32, [1, 54, 68, 128]),
-                                tf.placeholder(tf.float32, [1, 27, 34, 256]),
-                                tf.placeholder(tf.float32, [1, 14, 17, 512]),
-                                tf.placeholder(tf.float32, [1, 7, 9, 512]),
-                                tf.placeholder(tf.float32, [1, 4, 5, 512]),
-                                tf.placeholder(tf.float32, [1, 2, 3, 1024])]
+                                tf.compat.v1.placeholder(tf.float32, [1, 108, 135, 64]),
+                                tf.compat.v1.placeholder(tf.float32, [1, 54, 68, 128]),
+                                tf.compat.v1.placeholder(tf.float32, [1, 27, 34, 256]),
+                                tf.compat.v1.placeholder(tf.float32, [1, 14, 17, 512]),
+                                tf.compat.v1.placeholder(tf.float32, [1, 7, 9, 512]),
+                                tf.compat.v1.placeholder(tf.float32, [1, 4, 5, 512]),
+                                tf.compat.v1.placeholder(tf.float32, [1, 2, 3, 1024])]
 
         self.hidden_state = [
                              np.zeros([1, 108, 135, 64],dtype=np.float32),
@@ -64,13 +63,13 @@ class RNN_depth_pred:
 
 
         self.hidden_state_pose_tf = [
-                                tf.placeholder(tf.float32, [1, 108, 135, 32]),
-                                tf.placeholder(tf.float32, [1, 54, 68, 128]),
-                                tf.placeholder(tf.float32, [1, 27, 34, 256]),
-                                tf.placeholder(tf.float32, [1, 14, 17, 512]),
-                                tf.placeholder(tf.float32, [1, 7, 9, 512]),
-                                tf.placeholder(tf.float32, [1, 4, 5, 512]),
-                                tf.placeholder(tf.float32, [1, 2, 3, 1024])]
+                                tf.compat.v1.placeholder(tf.float32, [1, 108, 135, 32]),
+                                tf.compat.v1.placeholder(tf.float32, [1, 54, 68, 128]),
+                                tf.compat.v1.placeholder(tf.float32, [1, 27, 34, 256]),
+                                tf.compat.v1.placeholder(tf.float32, [1, 14, 17, 512]),
+                                tf.compat.v1.placeholder(tf.float32, [1, 7, 9, 512]),
+                                tf.compat.v1.placeholder(tf.float32, [1, 4, 5, 512]),
+                                tf.compat.v1.placeholder(tf.float32, [1, 2, 3, 1024])]
 
         self.hidden_state_pose = [
                              np.zeros([1, 108, 135, 32],dtype=np.float32),
@@ -84,6 +83,7 @@ class RNN_depth_pred:
     def construct_model(self):
 
         # Construct depth and pose prediction network
+        print('build model')
         self.pred_depth, self.hidden_state_tf1 = rnn_depth_net_encoderlstm(self.image, 
                                                                 self.hidden_state_tf, 
                                                                 is_training=False)
@@ -92,14 +92,15 @@ class RNN_depth_pred:
                                                     self.hidden_state_pose_tf, 
                                                     is_training=False)
 
-        config = tf.ConfigProto(allow_soft_placement=True)
+        config = tf.compat.v1.ConfigProto(allow_soft_placement=True)
         config.gpu_options.allow_growth = True
-        self.sess = tf.Session(config=config)
-        saver = tf.train.Saver()
+        self.sess = tf.compat.v1.Session(config=config)
+        saver = tf.compat.v1.train.Saver()
 
         # Restore model
-        self.sess.run(tf.local_variables_initializer())
-        self.sess.run(tf.global_variables_initializer())
+        print('restore model')
+        self.sess.run(tf.compat.v1.local_variables_initializer())
+        self.sess.run(tf.compat.v1.global_variables_initializer())
         saver.restore(self.sess, self.checkpoint_dir)
 
 
@@ -110,7 +111,7 @@ class RNN_depth_pred:
         # parts[-2] = parts[-2][:5]
         # image_name = '/'.join(parts)
 
-        curr_img = scipy.misc.imread(image_name)
+        curr_img = imageio.imread(image_name)
         curr_img = curr_img/255
 
 
@@ -181,12 +182,13 @@ class RNN_depth_pred:
 # Testing
 #=========================
 if __name__ == '__main__':
-    checkpoint = '/media/wrlife/fullPfizer/playpen/research/code/depth_rnn_cvpr2019/rnn_depth/model_colon/mtv0_inv/model-355000'
-    image_path = '/playpen/research/Data/benchmark/colon1'
+    checkpoint = '/playpen2/COLON_RNNSLAM_TEST/models/model-145000'
+    image_path = '/playpen2/COLON_RNNSLAM_TEST/sequences/020/image'
 
     # Initialize RNN_depth_pred instance
     my_pred = RNN_depth_pred(checkpoint, 
-                            image_path)
+                            image_path,
+                            'test_out')
 
     # Frame by frame prediction
     img_list = sorted(glob.glob(my_pred.data_path + '/*.jpg'))

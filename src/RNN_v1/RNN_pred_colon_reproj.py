@@ -7,8 +7,8 @@ import scipy
 from util import *
 import struct
 from utils_lr import projective_inverse_warp
-import argparse
-import os
+from PIL import Image
+from shutil import rmtree
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -31,12 +31,27 @@ class RNN_depth_pred:
 
         self.img_height = img_height
         self.img_width = img_width
+
+        self.hs_heights = []
+        self.hs_widths = []
+        h = self.img_height
+        w = self.img_width
+        for i in range(7):
+            h = (h + 1) // 2
+            w = (w + 1) // 2
+            self.hs_heights.append(h)
+            self.hs_widths.append(w)
+        print('Hidden state sizes:')
+        print(self.hs_heights)
+        print(self.hs_widths)
+
+
         self.checkpoint_dir = checkpoint_dir
         self.data_path = data_path
-        self.image_tf = tf.compat.v1.placeholder(tf.float32, [1, self.img_height, self.img_width, 3])
+        self.image_tf = tf.placeholder(tf.float32, [1, self.img_height, self.img_width, 3])
 
         ### Keyframe for computing image reprojection error
-        self.keyframe_tf = tf.compat.v1.placeholder(tf.float32, [1, self.img_height, self.img_width, 3])
+        self.keyframe_tf = tf.placeholder(tf.float32, [1, self.img_height, self.img_width, 3])
 
         ### intrinsics
         r1 = tf.constant([145.4410, 0, 135.6993])
@@ -60,41 +75,41 @@ class RNN_depth_pred:
     def init_hidden(self):
 
         self.hidden_state_tf = [
-                                tf.compat.v1.placeholder(tf.float32, [1, 108, 135, 64]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 54, 68, 128]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 27, 34, 256]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 14, 17, 512]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 7, 9, 512]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 4, 5, 512]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 2, 3, 1024])]
+                                tf.placeholder(tf.float32, [1, self.hs_heights[0], self.hs_widths[0], 64]),
+                                tf.placeholder(tf.float32, [1, self.hs_heights[1], self.hs_widths[1], 128]),
+                                tf.placeholder(tf.float32, [1, self.hs_heights[2], self.hs_widths[2], 256]),
+                                tf.placeholder(tf.float32, [1, self.hs_heights[3], self.hs_widths[3], 512]),
+                                tf.placeholder(tf.float32, [1, self.hs_heights[4], self.hs_widths[4], 512]),
+                                tf.placeholder(tf.float32, [1, self.hs_heights[5], self.hs_widths[5], 512]),
+                                tf.placeholder(tf.float32, [1, self.hs_heights[6], self.hs_widths[6], 1024])]
 
         self.hidden_state = [
-                             np.zeros([1, 108, 135, 64],dtype=np.float32),
-                             np.zeros([1, 54, 68, 128],dtype=np.float32),
-                             np.zeros([1, 27, 34, 256],dtype=np.float32),
-                             np.zeros([1, 14, 17, 512],dtype=np.float32),
-                             np.zeros([1, 7, 9, 512],dtype=np.float32),
-                             np.zeros([1, 4, 5, 512],dtype=np.float32),
-                             np.zeros([1, 2, 3, 1024],dtype=np.float32)]
+                             np.zeros([1, self.hs_heights[0], self.hs_widths[0], 64],dtype=np.float32),
+                             np.zeros([1, self.hs_heights[1], self.hs_widths[1], 128],dtype=np.float32),
+                             np.zeros([1, self.hs_heights[2], self.hs_widths[2], 256],dtype=np.float32),
+                             np.zeros([1, self.hs_heights[3], self.hs_widths[3], 512],dtype=np.float32),
+                             np.zeros([1, self.hs_heights[4], self.hs_widths[4], 512],dtype=np.float32),
+                             np.zeros([1, self.hs_heights[5], self.hs_widths[5], 512],dtype=np.float32),
+                             np.zeros([1, self.hs_heights[6], self.hs_widths[6], 1024],dtype=np.float32)]
 
 
         self.hidden_state_pose_tf = [
-                                tf.compat.v1.placeholder(tf.float32, [1, 108, 135, 32]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 54, 68, 128]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 27, 34, 256]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 14, 17, 512]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 7, 9, 512]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 4, 5, 512]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 2, 3, 1024])]
+                                tf.placeholder(tf.float32, [1, self.hs_heights[0], self.hs_widths[0], 32]),
+                                tf.placeholder(tf.float32, [1, self.hs_heights[1], self.hs_widths[1], 128]),
+                                tf.placeholder(tf.float32, [1, self.hs_heights[2], self.hs_widths[2], 256]),
+                                tf.placeholder(tf.float32, [1, self.hs_heights[3], self.hs_widths[3], 512]),
+                                tf.placeholder(tf.float32, [1, self.hs_heights[4], self.hs_widths[4], 512]),
+                                tf.placeholder(tf.float32, [1, self.hs_heights[5], self.hs_widths[5], 512]),
+                                tf.placeholder(tf.float32, [1, self.hs_heights[6], self.hs_widths[6], 1024])]
 
         self.hidden_state_pose = [
-                             np.zeros([1, 108, 135, 32],dtype=np.float32),
-                             np.zeros([1, 54, 68, 128],dtype=np.float32),
-                             np.zeros([1, 27, 34, 256],dtype=np.float32),
-                             np.zeros([1, 14, 17, 512],dtype=np.float32),
-                             np.zeros([1, 7, 9, 512],dtype=np.float32),
-                             np.zeros([1, 4, 5, 512],dtype=np.float32),
-                             np.zeros([1, 2, 3, 1024],dtype=np.float32)]
+                             np.zeros([1, self.hs_heights[0], self.hs_widths[0], 32],dtype=np.float32),
+                             np.zeros([1, self.hs_heights[1], self.hs_widths[1], 128],dtype=np.float32),
+                             np.zeros([1, self.hs_heights[2], self.hs_widths[2], 256],dtype=np.float32),
+                             np.zeros([1, self.hs_heights[3], self.hs_widths[3], 512],dtype=np.float32),
+                             np.zeros([1, self.hs_heights[4], self.hs_widths[4], 512],dtype=np.float32),
+                             np.zeros([1, self.hs_heights[5], self.hs_widths[5], 512],dtype=np.float32),
+                             np.zeros([1, self.hs_heights[6], self.hs_widths[6], 1024],dtype=np.float32)]
 
     def construct_model(self):
 
@@ -108,14 +123,14 @@ class RNN_depth_pred:
                                                     is_training=False)
 
 
-        config = tf.compat.v1.ConfigProto(allow_soft_placement=True)
+        config = tf.ConfigProto(allow_soft_placement=True)
         config.gpu_options.allow_growth = True
-        self.sess = tf.compat.v1.Session(config=config)
-        saver = tf.compat.v1.train.Saver()
+        self.sess = tf.Session(config=config)
+        saver = tf.train.Saver()
 
         # Restore model
-        self.sess.run(tf.compat.v1.local_variables_initializer())
-        self.sess.run(tf.compat.v1.global_variables_initializer())
+        self.sess.run(tf.local_variables_initializer())
+        self.sess.run(tf.global_variables_initializer())
         saver.restore(self.sess, self.checkpoint_dir)
 
 
@@ -129,15 +144,15 @@ class RNN_depth_pred:
             diff = tf.abs(label - pred)
             #diff = tf.where(tf.is_inf(diff), tf.zeros_like(diff), diff)
             #diff = tf.where(tf.is_nan(diff), tf.zeros_like(diff), diff)
-            div = tf.math.count_nonzero(diff,dtype=tf.float32)
+            div = tf.count_nonzero(diff,dtype=tf.float32)
             # div = tf.count_nonzero(diff,dtype=tf.float32)
             if v_weight is not None:
                 diff = tf.multiply(diff, v_weight)
 
             if v_weight is not None:
-                return tf.reduce_sum(input_tensor=diff)/(tf.math.count_nonzero(v_weight,dtype=tf.float32)+0.000000001)
+                return tf.reduce_sum(diff)/(tf.count_nonzero(v_weight,dtype=tf.float32)+0.000000001)
             else:
-                return tf.reduce_sum(input_tensor=diff)/(div+0.000000001)
+                return tf.reduce_sum(diff)/(div+0.000000001)
 
 
         proj_img, wmask, flow = projective_inverse_warp(
@@ -212,6 +227,7 @@ class RNN_depth_pred:
         pose_tum = [qw, qx, qy, qz, tx, ty, tz]
 
         depth = 1.0/pred_depth[0,:,:,0]
+        print('Predicted depth map: [{}x{}]'.format(depth.shape[0], depth.shape[1]))
         if self.output_dir is not None:
             image_basename = os.path.basename(image_name)
             depth_output_path = os.path.join(self.output_dir, image_basename + '.depth.bin')
@@ -223,7 +239,10 @@ class RNN_depth_pred:
             with open(pose_output_path, 'wb') as file:
                 pose_tum_np.astype(np.float32).tofile(file)
 
-        return depth, self.accum_pose, pose_tum, reproj_err  # Return reprojection error
+        if relative:
+            return depth, cur_pose, pose_tum, reproj_err
+        else:
+            return depth, self.accum_pose, pose_tum, reproj_err  # Return reprojection error
 
     def update(self):
         self.keyframe = self.curr_img
@@ -239,34 +258,38 @@ class RNN_depth_pred:
 # Testing
 #=========================
 if __name__ == '__main__':
+    import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('rnnmodel')
-    parser.add_argument('files')
-    parser.add_argument('output_prefix')
+    parser.add_argument('--checkpoint')
+    parser.add_argument('--image_dir')
+    parser.add_argument('--output_dir')
     args = parser.parse_args()
-    checkpoint = args.rnnmodel
-    image_path = args.files
-    output_path = os.path.join(args.output_prefix, 'poses_rnn_result.txt')
+    # checkpoint = '/media/wrlife/fullPfizer/playpen/research/code/depth_rnn_cvpr2019/rnn_depth/model_colon/mtv0_inv/model-355000'
+    # image_path = '/playpen/research/Data/benchmark/colon1'
+
+    img_list = sorted(glob.glob(args.image_dir + '/*.*'))
+    sample_img = Image.open(img_list[0])
+    width, height = sample_img.size
+    print('image size: w {} h {}'.format(width, height))
 
     # Initialize RNN_depth_pred instance
-    my_pred = RNN_depth_pred(checkpoint, image_path)
+    if os.path.exists(args.output_dir):
+        rmtree(args.output_dir)
+    os.makedirs(args.output_dir)
+    my_pred = RNN_depth_pred(args.checkpoint, data_path=args.image_dir, output_dir=args.output_dir, img_height=height, img_width=width)
 
     # Frame by frame prediction
-    img_list = sorted(glob.glob(os.path.join(image_path, '*.jpg')))
-
     # Assign first frame as keyframe and store hidden state
     my_pred.assign_keyframe_by_path(img_list[0])
     _,_,_,_ = my_pred.predict(img_list[0])
     my_pred.update()
 
-    with open(output_path, 'w') as file:
-        for i, image in enumerate(img_list):
+    for image in img_list:
 
-            _,_,pose,reproj_err = my_pred.predict(image)
+        _,_,_,reproj_err = my_pred.predict(image)
+        print('Reprojection loss is ', reproj_err)
+
+        if reproj_err<0.2:
             my_pred.update()
-            
-            file.write('{} {} {} {} {} {} {} {}\n'.format(
-                i, pose[4], pose[5], pose[6],
-                pose[1], pose[2], pose[3], pose[0]))
-
+            print("Update %s"%image)
 

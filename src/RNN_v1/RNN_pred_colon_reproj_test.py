@@ -1,10 +1,14 @@
-import tensorflow as tf
-tf.compat.v1.disable_eager_execution()
 from model import *
+import cv2
 import os, glob
 import numpy as np
 from pose_evaluation_utils import *
-import imageio
+import scipy
+from util import *
+import struct
+from utils_lr import projective_inverse_warp
+import argparse
+import os
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -29,11 +33,23 @@ class RNN_depth_pred:
         self.img_width = img_width
         self.checkpoint_dir = checkpoint_dir
         self.data_path = data_path
-        self.image = tf.compat.v1.placeholder(tf.float32, [1, self.img_height, self.img_width, 3])
+        self.image_tf = tf.placeholder(tf.float32, [1, self.img_height, self.img_width, 3])
+
+        ### Keyframe for computing image reprojection error
+        self.keyframe_tf = tf.placeholder(tf.float32, [1, self.img_height, self.img_width, 3])
+
+        ### intrinsics
+        r1 = tf.constant([145.4410, 0, 135.6993])
+        r2 = tf.constant([0, 145.4410, 107.8946])
+        r3 = tf.constant([0.,0.,1.])
+        self.intrinsics_tf = tf.expand_dims(tf.stack([r1, r2, r3], axis=0),axis=0)
+
         self.accum_pose = np.eye(4)
 
         self.init_hidden()
         self.construct_model()
+        ### Image reprojection error
+        self.compute_reproj_err()
 
         self.output_dir = output_dir
         if self.output_dir is not None:
@@ -44,13 +60,13 @@ class RNN_depth_pred:
     def init_hidden(self):
 
         self.hidden_state_tf = [
-                                tf.compat.v1.placeholder(tf.float32, [1, 108, 135, 64]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 54, 68, 128]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 27, 34, 256]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 14, 17, 512]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 7, 9, 512]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 4, 5, 512]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 2, 3, 1024])]
+                                tf.placeholder(tf.float32, [1, 108, 135, 64]),
+                                tf.placeholder(tf.float32, [1, 54, 68, 128]),
+                                tf.placeholder(tf.float32, [1, 27, 34, 256]),
+                                tf.placeholder(tf.float32, [1, 14, 17, 512]),
+                                tf.placeholder(tf.float32, [1, 7, 9, 512]),
+                                tf.placeholder(tf.float32, [1, 4, 5, 512]),
+                                tf.placeholder(tf.float32, [1, 2, 3, 1024])]
 
         self.hidden_state = [
                              np.zeros([1, 108, 135, 64],dtype=np.float32),
@@ -63,13 +79,13 @@ class RNN_depth_pred:
 
 
         self.hidden_state_pose_tf = [
-                                tf.compat.v1.placeholder(tf.float32, [1, 108, 135, 32]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 54, 68, 128]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 27, 34, 256]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 14, 17, 512]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 7, 9, 512]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 4, 5, 512]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 2, 3, 1024])]
+                                tf.placeholder(tf.float32, [1, 108, 135, 32]),
+                                tf.placeholder(tf.float32, [1, 54, 68, 128]),
+                                tf.placeholder(tf.float32, [1, 27, 34, 256]),
+                                tf.placeholder(tf.float32, [1, 14, 17, 512]),
+                                tf.placeholder(tf.float32, [1, 7, 9, 512]),
+                                tf.placeholder(tf.float32, [1, 4, 5, 512]),
+                                tf.placeholder(tf.float32, [1, 2, 3, 1024])]
 
         self.hidden_state_pose = [
                              np.zeros([1, 108, 135, 32],dtype=np.float32),
@@ -83,25 +99,60 @@ class RNN_depth_pred:
     def construct_model(self):
 
         # Construct depth and pose prediction network
-        print('build model')
-        self.pred_depth, self.hidden_state_tf1 = rnn_depth_net_encoderlstm(self.image, 
+        self.pred_depth, self.hidden_state_tf1 = rnn_depth_net_encoderlstm(self.image_tf, 
                                                                 self.hidden_state_tf, 
                                                                 is_training=False)
 
-        self.pred_pose, self.hidden_state_pose_tf1 = pose_net(tf.concat([self.image,self.pred_depth],axis=-1), 
+        self.pred_pose, self.hidden_state_pose_tf1 = pose_net(tf.concat([self.image_tf, self.pred_depth],axis=-1), 
                                                     self.hidden_state_pose_tf, 
                                                     is_training=False)
 
-        config = tf.compat.v1.ConfigProto(allow_soft_placement=True)
+
+        config = tf.ConfigProto(allow_soft_placement=True)
         config.gpu_options.allow_growth = True
-        self.sess = tf.compat.v1.Session(config=config)
-        saver = tf.compat.v1.train.Saver()
+        self.sess = tf.Session(config=config)
+        saver = tf.train.Saver()
 
         # Restore model
-        print('restore model')
-        self.sess.run(tf.compat.v1.local_variables_initializer())
-        self.sess.run(tf.compat.v1.global_variables_initializer())
+        self.sess.run(tf.local_variables_initializer())
+        self.sess.run(tf.global_variables_initializer())
         saver.restore(self.sess, self.checkpoint_dir)
+
+
+    ###============
+    # Reprojection error
+    ###============
+    def compute_reproj_err(self):
+
+
+        def l1loss(label, pred, v_weight=None):
+            diff = tf.abs(label - pred)
+            #diff = tf.where(tf.is_inf(diff), tf.zeros_like(diff), diff)
+            #diff = tf.where(tf.is_nan(diff), tf.zeros_like(diff), diff)
+            div = tf.count_nonzero(diff,dtype=tf.float32)
+            # div = tf.count_nonzero(diff,dtype=tf.float32)
+            if v_weight is not None:
+                diff = tf.multiply(diff, v_weight)
+
+            if v_weight is not None:
+                return tf.reduce_sum(diff)/(tf.count_nonzero(v_weight,dtype=tf.float32)+0.000000001)
+            else:
+                return tf.reduce_sum(diff)/(div+0.000000001)
+
+
+        proj_img, wmask, flow = projective_inverse_warp(
+            self.keyframe_tf,
+            1.0/tf.squeeze( self.pred_depth, axis=3),
+            self.pred_pose,
+            self.intrinsics_tf,
+            format='eular'
+        )
+
+        self.reproj_loss = l1loss(self.image_tf, 
+                                  proj_img,
+                                  wmask)
+
+
 
 
     def predict(self, image_name, relative=True):
@@ -111,12 +162,13 @@ class RNN_depth_pred:
         # parts[-2] = parts[-2][:5]
         # image_name = '/'.join(parts)
 
-        curr_img = imageio.imread(image_name)
-        curr_img = curr_img/255
+        self.curr_img = scipy.misc.imread(image_name)
+        self.curr_img = self.curr_img/255
 
 
         My_feed = {
-                     self.image: np.expand_dims(curr_img, axis=0),
+                     self.image_tf: np.expand_dims(self.curr_img, axis=0),
+                     self.keyframe_tf: np.expand_dims(self.keyframe, axis=0),  # Feed keyframe to compute proj err
                      self.hidden_state_tf[0]: self.hidden_state[0],
                      self.hidden_state_tf[1]: self.hidden_state[1],
                      self.hidden_state_tf[2]: self.hidden_state[2],
@@ -133,18 +185,16 @@ class RNN_depth_pred:
                      self.hidden_state_pose_tf[6]: self.hidden_state_pose[6],
                      }
 
-
-        pred_depth, pred_pose, self.new_hidden_state, self.new_hidden_state_pose = self.sess.run([self.pred_depth, 
-                                                                                      self.pred_pose, 
+        pred_depth, pred_pose, reproj_err, self.new_hidden_state, self.new_hidden_state_pose = self.sess.run([self.pred_depth, 
+                                                                                      self.pred_pose,
+                                                                                      self.reproj_loss,
                                                                                       self.hidden_state_tf1, 
                                                                                       self.hidden_state_pose_tf1], 
-                                                                                      feed_dict=My_feed)
+                                                                                      feed_dict=My_feed)#self.reproj_loss,
 
         # Compute accumulated pose
         cur_pose = pose_vec_to_mat(pred_pose[0])
         self.accum_pose = np.float64(np.dot(self.accum_pose, cur_pose))
-
-        
         
         # TUM pose format
         if relative:
@@ -167,33 +217,56 @@ class RNN_depth_pred:
             depth_output_path = os.path.join(self.output_dir, image_basename + '.depth.bin')
             with open(depth_output_path, 'wb') as file:
                 depth.astype(np.float32).tofile(file)
+            pose_tum.append(reproj_err)
             pose_tum_np = np.array(pose_tum, dtype=np.float32)
             pose_output_path = os.path.join(self.output_dir, image_basename + '.pose.bin')
             with open(pose_output_path, 'wb') as file:
                 pose_tum_np.astype(np.float32).tofile(file)
 
-        return depth, self.accum_pose, pose_tum
+        return depth, self.accum_pose, pose_tum, reproj_err  # Return reprojection error
 
     def update(self):
+        self.keyframe = self.curr_img
         self.hidden_state = self.new_hidden_state
         self.hidden_state_pose = self.new_hidden_state_pose
+
+    def assign_keyframe_by_path(self,imagepath):
+        curr_img = scipy.misc.imread(imagepath)
+        curr_img = curr_img/255.     
+        self.keyframe = curr_img
 
 #=========================
 # Testing
 #=========================
 if __name__ == '__main__':
-    checkpoint = '/playpen2/COLON_RNNSLAM_TEST/models/model-145000'
-    image_path = '/playpen2/COLON_RNNSLAM_TEST/sequences/020/image'
+    parser = argparse.ArgumentParser()
+    parser.add_argument('rnnmodel')
+    parser.add_argument('files')
+    parser.add_argument('output_prefix')
+    args = parser.parse_args()
+    checkpoint = args.rnnmodel
+    image_path = args.files
+    output_path = os.path.join(args.output_prefix, 'poses_rnn_result.txt')
 
     # Initialize RNN_depth_pred instance
-    my_pred = RNN_depth_pred(checkpoint, 
-                            image_path,
-                            'test_out')
+    my_pred = RNN_depth_pred(checkpoint, image_path)
 
     # Frame by frame prediction
-    img_list = sorted(glob.glob(my_pred.data_path + '/*.jpg'))
-    for image in img_list:
+    img_list = sorted(glob.glob(os.path.join(image_path, '*.jpg')))
 
-        _,_,_ = my_pred.predict(image)
-        print("processed %s"%image)
+    # Assign first frame as keyframe and store hidden state
+    my_pred.assign_keyframe_by_path(img_list[0])
+    _,_,_,_ = my_pred.predict(img_list[0])
+    my_pred.update()
+
+    with open(output_path, 'w') as file:
+        for i, image in enumerate(img_list):
+
+            _,_,pose,reproj_err = my_pred.predict(image)
+            my_pred.update()
+            
+            file.write('{} {} {} {} {} {} {} {}\n'.format(
+                i, pose[4], pose[5], pose[6],
+                pose[1], pose[2], pose[3], pose[0]))
+
 

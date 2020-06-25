@@ -48,10 +48,10 @@ class RNN_depth_pred:
 
         self.checkpoint_dir = checkpoint_dir
         self.data_path = data_path
-        self.image_tf = tf.placeholder(tf.float32, [1, self.img_height, self.img_width, 3])
+        self.image_tf = tf.compat.v1.placeholder(tf.float32, [1, self.img_height, self.img_width, 3])
 
         ### Keyframe for computing image reprojection error
-        self.keyframe_tf = tf.placeholder(tf.float32, [1, self.img_height, self.img_width, 3])
+        self.keyframe_tf = tf.compat.v1.placeholder(tf.float32, [1, self.img_height, self.img_width, 3])
 
         ### intrinsics
         r1 = tf.constant([145.4410, 0, 135.6993])
@@ -75,13 +75,13 @@ class RNN_depth_pred:
     def init_hidden(self):
 
         self.hidden_state_tf = [
-                                tf.placeholder(tf.float32, [1, self.hs_heights[0], self.hs_widths[0], 64]),
-                                tf.placeholder(tf.float32, [1, self.hs_heights[1], self.hs_widths[1], 128]),
-                                tf.placeholder(tf.float32, [1, self.hs_heights[2], self.hs_widths[2], 256]),
-                                tf.placeholder(tf.float32, [1, self.hs_heights[3], self.hs_widths[3], 512]),
-                                tf.placeholder(tf.float32, [1, self.hs_heights[4], self.hs_widths[4], 512]),
-                                tf.placeholder(tf.float32, [1, self.hs_heights[5], self.hs_widths[5], 512]),
-                                tf.placeholder(tf.float32, [1, self.hs_heights[6], self.hs_widths[6], 1024])]
+                                tf.compat.v1.placeholder(tf.float32, [1, self.hs_heights[0], self.hs_widths[0], 64]),
+                                tf.compat.v1.placeholder(tf.float32, [1, self.hs_heights[1], self.hs_widths[1], 128]),
+                                tf.compat.v1.placeholder(tf.float32, [1, self.hs_heights[2], self.hs_widths[2], 256]),
+                                tf.compat.v1.placeholder(tf.float32, [1, self.hs_heights[3], self.hs_widths[3], 512]),
+                                tf.compat.v1.placeholder(tf.float32, [1, self.hs_heights[4], self.hs_widths[4], 512]),
+                                tf.compat.v1.placeholder(tf.float32, [1, self.hs_heights[5], self.hs_widths[5], 512]),
+                                tf.compat.v1.placeholder(tf.float32, [1, self.hs_heights[6], self.hs_widths[6], 1024])]
 
         self.hidden_state = [
                              np.zeros([1, self.hs_heights[0], self.hs_widths[0], 64],dtype=np.float32),
@@ -94,13 +94,13 @@ class RNN_depth_pred:
 
 
         self.hidden_state_pose_tf = [
-                                tf.placeholder(tf.float32, [1, self.hs_heights[0], self.hs_widths[0], 32]),
-                                tf.placeholder(tf.float32, [1, self.hs_heights[1], self.hs_widths[1], 128]),
-                                tf.placeholder(tf.float32, [1, self.hs_heights[2], self.hs_widths[2], 256]),
-                                tf.placeholder(tf.float32, [1, self.hs_heights[3], self.hs_widths[3], 512]),
-                                tf.placeholder(tf.float32, [1, self.hs_heights[4], self.hs_widths[4], 512]),
-                                tf.placeholder(tf.float32, [1, self.hs_heights[5], self.hs_widths[5], 512]),
-                                tf.placeholder(tf.float32, [1, self.hs_heights[6], self.hs_widths[6], 1024])]
+                                tf.compat.v1.placeholder(tf.float32, [1, self.hs_heights[0], self.hs_widths[0], 32]),
+                                tf.compat.v1.placeholder(tf.float32, [1, self.hs_heights[1], self.hs_widths[1], 128]),
+                                tf.compat.v1.placeholder(tf.float32, [1, self.hs_heights[2], self.hs_widths[2], 256]),
+                                tf.compat.v1.placeholder(tf.float32, [1, self.hs_heights[3], self.hs_widths[3], 512]),
+                                tf.compat.v1.placeholder(tf.float32, [1, self.hs_heights[4], self.hs_widths[4], 512]),
+                                tf.compat.v1.placeholder(tf.float32, [1, self.hs_heights[5], self.hs_widths[5], 512]),
+                                tf.compat.v1.placeholder(tf.float32, [1, self.hs_heights[6], self.hs_widths[6], 1024])]
 
         self.hidden_state_pose = [
                              np.zeros([1, self.hs_heights[0], self.hs_widths[0], 32],dtype=np.float32),
@@ -123,14 +123,14 @@ class RNN_depth_pred:
                                                     is_training=False)
 
 
-        config = tf.ConfigProto(allow_soft_placement=True)
+        config = tf.compat.v1.ConfigProto(allow_soft_placement=True)
         config.gpu_options.allow_growth = True
-        self.sess = tf.Session(config=config)
-        saver = tf.train.Saver()
+        self.sess = tf.compat.v1.Session(config=config)
+        saver = tf.compat.v1.train.Saver()
 
         # Restore model
-        self.sess.run(tf.local_variables_initializer())
-        self.sess.run(tf.global_variables_initializer())
+        self.sess.run(tf.compat.v1.local_variables_initializer())
+        self.sess.run(tf.compat.v1.global_variables_initializer())
         saver.restore(self.sess, self.checkpoint_dir)
 
 
@@ -144,15 +144,15 @@ class RNN_depth_pred:
             diff = tf.abs(label - pred)
             #diff = tf.where(tf.is_inf(diff), tf.zeros_like(diff), diff)
             #diff = tf.where(tf.is_nan(diff), tf.zeros_like(diff), diff)
-            div = tf.count_nonzero(diff,dtype=tf.float32)
+            div = tf.math.count_nonzero(diff,dtype=tf.float32)
             # div = tf.count_nonzero(diff,dtype=tf.float32)
             if v_weight is not None:
                 diff = tf.multiply(diff, v_weight)
 
             if v_weight is not None:
-                return tf.reduce_sum(diff)/(tf.count_nonzero(v_weight,dtype=tf.float32)+0.000000001)
+                return tf.reduce_sum(input_tensor=diff)/(tf.math.count_nonzero(v_weight,dtype=tf.float32)+0.000000001)
             else:
-                return tf.reduce_sum(diff)/(div+0.000000001)
+                return tf.reduce_sum(input_tensor=diff)/(div+0.000000001)
 
 
         proj_img, wmask, flow = projective_inverse_warp(

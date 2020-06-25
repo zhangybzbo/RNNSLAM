@@ -1,7 +1,6 @@
 from __future__ import division
 import tensorflow as tf
-# import tensorflow.contrib.slim as slim
-import tf_slim as slim
+import tensorflow.contrib.slim as slim
 import BasicConvLSTMCell
 
 
@@ -11,11 +10,11 @@ def resize_like(inputs, ref):
     rH, rW = ref.get_shape()[1], ref.get_shape()[2]
     if iH == rH and iW == rW:
         return inputs
-    return tf.image.resize(inputs, [rH, rW], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+    return tf.image.resize_nearest_neighbor(inputs, [rH.value, rW.value])
 
 def convLSTM(input, hidden, filters, kernel, scope):
 
-    with tf.compat.v1.variable_scope(scope, initializer = tf.compat.v1.truncated_normal_initializer(stddev=0.1)):
+    with tf.variable_scope(scope, initializer = tf.truncated_normal_initializer(stddev=0.1)):
         cell = BasicConvLSTMCell.BasicConvLSTMCell([input.get_shape()[1], input.get_shape()[2]], kernel, filters)
 
         if hidden is None:
@@ -28,15 +27,15 @@ def convLSTM(input, hidden, filters, kernel, scope):
 def rnn_depth_net(current_input,hidden_state,is_training=True):
 
     batch_norm_params = {'is_training': is_training,'decay':0.99}
-    H = current_input.get_shape()[1]
-    W = current_input.get_shape()[2]
+    H = current_input.get_shape()[1].value
+    W = current_input.get_shape()[2].value
 
-    with tf.compat.v1.variable_scope('rnn_depth_net', reuse = tf.compat.v1.AUTO_REUSE) as sc:
+    with tf.variable_scope('rnn_depth_net', reuse = tf.AUTO_REUSE) as sc:
 
         with slim.arg_scope([slim.conv2d, slim.conv2d_transpose],
                             normalizer_fn=slim.batch_norm,
                             normalizer_params=batch_norm_params,
-                            weights_regularizer=tf.keras.regularizers.l2(0.5 * (0.005)),
+                            weights_regularizer=slim.l2_regularizer(0.005),
                             activation_fn=tf.nn.leaky_relu
                             ):
                           
@@ -115,11 +114,11 @@ def rnn_depth_net(current_input,hidden_state,is_training=True):
 
 def pose_net(posenet_inputs, hidden_state, is_training=True):
     batch_norm_params = {'is_training': is_training,'decay':0.99}
-    with tf.compat.v1.variable_scope('pose_net', reuse = tf.compat.v1.AUTO_REUSE) as sc:
+    with tf.variable_scope('pose_net', reuse = tf.AUTO_REUSE) as sc:
         with slim.arg_scope([slim.conv2d],
                             normalizer_fn=slim.batch_norm,
                             normalizer_params=batch_norm_params,
-                            weights_regularizer=tf.keras.regularizers.l2(0.5 * (0.005)),
+                            weights_regularizer=slim.l2_regularizer(0.005),
                             activation_fn=tf.nn.relu):
             conv1  = slim.conv2d(posenet_inputs, 16,  7, 2)
             cnv1b, hidden1 = convLSTM(conv1, hidden_state[0], 16, [3, 3], scope='cnv1_lstm')
@@ -137,7 +136,7 @@ def pose_net(posenet_inputs, hidden_state, is_training=True):
             cnv7b, hidden7 = convLSTM(conv7, hidden_state[6], 512, [3, 3], scope='cnv7_lstm')
             pose_pred = slim.conv2d(cnv7b, 6, 1, 1,
                                     normalizer_fn=None, activation_fn=None)
-            pose_avg = tf.reduce_mean(input_tensor=pose_pred, axis=[1, 2])
+            pose_avg = tf.reduce_mean(pose_pred, [1, 2])
             pose_final = tf.reshape(pose_avg, [-1, 6])*0.01
             return pose_final,[hidden1, hidden2, hidden3, hidden4, hidden5, hidden6, hidden7]
 
@@ -149,15 +148,15 @@ def pose_net(posenet_inputs, hidden_state, is_training=True):
 def rnn_depth_net_fulllstm(current_input,hidden_state,is_training=True):
 
     batch_norm_params = {'is_training': is_training,'decay':0.99}
-    H = current_input.get_shape()[1]
-    W = current_input.get_shape()[2]
+    H = current_input.get_shape()[1].value
+    W = current_input.get_shape()[2].value
 
-    with tf.compat.v1.variable_scope('rnn_depth_net', reuse = tf.compat.v1.AUTO_REUSE) as sc:
+    with tf.variable_scope('rnn_depth_net', reuse = tf.AUTO_REUSE) as sc:
 
         with slim.arg_scope([slim.conv2d, slim.conv2d_transpose],
                             normalizer_fn=slim.batch_norm,
                             normalizer_params=batch_norm_params,
-                            weights_regularizer=tf.keras.regularizers.l2(0.5 * (0.005)),
+                            weights_regularizer=slim.l2_regularizer(0.005),
                             activation_fn=tf.nn.leaky_relu
                             ):
                           
@@ -238,15 +237,15 @@ def rnn_depth_net_fulllstm(current_input,hidden_state,is_training=True):
 def rnn_depth_net_encoderlstm(current_input,hidden_state,is_training=True):
 
     batch_norm_params = {'is_training': is_training,'decay':0.99}
-    H = current_input.get_shape()[1]
-    W = current_input.get_shape()[2]
+    H = current_input.get_shape()[1].value
+    W = current_input.get_shape()[2].value
 
-    with tf.compat.v1.variable_scope('rnn_depth_net', reuse = tf.compat.v1.AUTO_REUSE) as sc:
+    with tf.variable_scope('rnn_depth_net', reuse = tf.AUTO_REUSE) as sc:
 
         with slim.arg_scope([slim.conv2d, slim.conv2d_transpose],
                             normalizer_fn=slim.batch_norm,
                             normalizer_params=batch_norm_params,
-                            weights_regularizer=tf.keras.regularizers.l2(0.5 * (0.005)),
+                            weights_regularizer=slim.l2_regularizer(0.005),
                             activation_fn=tf.nn.leaky_relu
                             ):
                           
@@ -331,15 +330,15 @@ def rnn_depth_net_encoderlstm(current_input,hidden_state,is_training=True):
 def rnn_depth_net_encoderlstm_wpose(current_input,hidden_state,is_training=True):
 
     batch_norm_params = {'is_training': is_training,'decay':0.99}
-    H = current_input.get_shape()[1]
-    W = current_input.get_shape()[2]
+    H = current_input.get_shape()[1].value
+    W = current_input.get_shape()[2].value
 
-    with tf.compat.v1.variable_scope('rnn_depth_net', reuse = tf.compat.v1.AUTO_REUSE) as sc:
+    with tf.variable_scope('rnn_depth_net', reuse = tf.AUTO_REUSE) as sc:
 
         with slim.arg_scope([slim.conv2d, slim.conv2d_transpose],
                             normalizer_fn=slim.batch_norm,
                             normalizer_params=batch_norm_params,
-                            weights_regularizer=tf.keras.regularizers.l2(0.5 * (0.005)),
+                            weights_regularizer=slim.l2_regularizer(0.005),
                             activation_fn=tf.nn.leaky_relu
                             ):
                           
@@ -365,11 +364,11 @@ def rnn_depth_net_encoderlstm_wpose(current_input,hidden_state,is_training=True)
             cnv7b, hidden7 = convLSTM(cnv7, hidden_state[6], 512, [3, 3], scope='cnv7_lstm')
             #cnv7b = slim.conv2d(cnv7,  512, [3, 3], rate=2, stride=1, scope='cnv7b')
             
-            with tf.compat.v1.variable_scope('pose'):    
+            with tf.variable_scope('pose'):    
 
                 pose_pred = slim.conv2d(cnv7b, 6, 1, 1,
                                     normalizer_fn=None, activation_fn=None)
-                pose_avg = tf.reduce_mean(input_tensor=pose_pred, axis=[1, 2])
+                pose_avg = tf.reduce_mean(pose_pred, [1, 2])
                 pose_final = tf.reshape(pose_avg, [-1, 6])*0.01
 
             

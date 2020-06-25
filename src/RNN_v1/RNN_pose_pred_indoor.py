@@ -32,7 +32,7 @@ class RNN_depth_pred:
         self.num_views = num_views
         self.checkpoint_dir = checkpoint_dir
         self.kitti_path = kitti_path
-        self.image = tf.compat.v1.placeholder(tf.float32, [1, self.img_height, self.img_width, 3])
+        self.image = tf.placeholder(tf.float32, [1, self.img_height, self.img_width, 3])
         self.output_dir = os.path.join(output_dir, checkpoint_dir.split('/')[-2])
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
@@ -58,13 +58,13 @@ class RNN_depth_pred:
         #                      np.zeros([1, 2, 7, 512],dtype=np.float32)]
 
         self.hidden_state_tf = [
-                                tf.compat.v1.placeholder(tf.float32, [1, 96, 128, 64]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 48, 64, 128]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 24, 32, 256]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 12, 16, 512]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 6, 8, 512]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 3, 4, 512]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 2, 2, 1024])]
+                                tf.placeholder(tf.float32, [1, 96, 128, 64]),
+                                tf.placeholder(tf.float32, [1, 48, 64, 128]),
+                                tf.placeholder(tf.float32, [1, 24, 32, 256]),
+                                tf.placeholder(tf.float32, [1, 12, 16, 512]),
+                                tf.placeholder(tf.float32, [1, 6, 8, 512]),
+                                tf.placeholder(tf.float32, [1, 3, 4, 512]),
+                                tf.placeholder(tf.float32, [1, 2, 2, 1024])]
 
         self.hidden_state = [
                              np.zeros([1, 96, 128, 64],dtype=np.float32),
@@ -77,13 +77,13 @@ class RNN_depth_pred:
 
 
         self.hidden_state_pose_tf = [
-                                tf.compat.v1.placeholder(tf.float32, [1, 96, 128, 32]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 48, 64, 128]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 24, 32, 256]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 12, 16, 512]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 6, 8, 512]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 3, 4, 512]),
-                                tf.compat.v1.placeholder(tf.float32, [1, 2, 2, 1024])]
+                                tf.placeholder(tf.float32, [1, 96, 128, 32]),
+                                tf.placeholder(tf.float32, [1, 48, 64, 128]),
+                                tf.placeholder(tf.float32, [1, 24, 32, 256]),
+                                tf.placeholder(tf.float32, [1, 12, 16, 512]),
+                                tf.placeholder(tf.float32, [1, 6, 8, 512]),
+                                tf.placeholder(tf.float32, [1, 3, 4, 512]),
+                                tf.placeholder(tf.float32, [1, 2, 2, 1024])]
 
         self.hidden_state_pose = [
                              np.zeros([1, 96, 128, 32],dtype=np.float32),
@@ -110,17 +110,17 @@ class RNN_depth_pred:
 
         est_depths, est_poses,hidden_state_tf, hidden_state_pose_tf = self.construct_model()
 
-        config = tf.compat.v1.ConfigProto(allow_soft_placement=True)
+        config = tf.ConfigProto(allow_soft_placement=True)
         config.gpu_options.allow_growth = True
 
         # Saver has all the trainable parameters
-        saver = tf.compat.v1.train.Saver()
+        saver = tf.train.Saver()
 
         # Session start
-        with tf.compat.v1.Session(config=config) as sess:
+        with tf.Session(config=config) as sess:
 
-            sess.run(tf.compat.v1.local_variables_initializer())
-            sess.run(tf.compat.v1.global_variables_initializer())
+            sess.run(tf.local_variables_initializer())
+            sess.run(tf.global_variables_initializer())
 
             # Restore model
             saver.restore(sess, self.checkpoint_dir)
