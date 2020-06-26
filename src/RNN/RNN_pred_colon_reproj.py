@@ -3,7 +3,7 @@ import cv2
 import os, glob
 import numpy as np
 from pose_evaluation_utils import *
-import scipy
+import imageio
 from util import *
 import struct
 from utils_lr import projective_inverse_warp
@@ -11,7 +11,7 @@ from PIL import Image
 from shutil import rmtree
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
+tf.compat.v1.disable_eager_execution()
 
 
 def get_image_grid(fx,fy,cx,cy,width,height):
@@ -177,7 +177,7 @@ class RNN_depth_pred:
         # parts[-2] = parts[-2][:5]
         # image_name = '/'.join(parts)
 
-        self.curr_img = scipy.misc.imread(image_name)
+        self.curr_img = imageio.imread(image_name)
         self.curr_img = self.curr_img/255
 
 
@@ -250,7 +250,7 @@ class RNN_depth_pred:
         self.hidden_state_pose = self.new_hidden_state_pose
 
     def assign_keyframe_by_path(self,imagepath):
-        curr_img = scipy.misc.imread(imagepath)
+        curr_img = imageio.imread(imagepath)
         curr_img = curr_img/255.     
         self.keyframe = curr_img
 
