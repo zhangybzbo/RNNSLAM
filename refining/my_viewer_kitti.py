@@ -1,8 +1,5 @@
-# import sys
-# sys.path.append("/home/zhangyb/library/Pangolin/build/src")
 import numpy as np
 import OpenGL.GL as gl
-# import pypangolin as pangolin
 import pangolin
 from multiprocessing import Process, Queue
 from PIL import Image

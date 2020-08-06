@@ -1,6 +1,6 @@
 import glob
 import numpy as np
-from my_viewer_kitti import MapViewer
+from my_viewer import MapViewer
 from my_components import Frame, Camera, Keyframe
 import time
 from PIL import Image
@@ -265,7 +265,7 @@ def main(args):
     # initialize system and map viewer
     system = MySystem(white_noise_variance=50., local_window_size=args.local_window_size)
     if args.use_viewer:
-        viewer = MapViewer(system, w=width, h=height, use_custom_depth_image=True)
+        viewer = MapViewer(system, w=width, h=height)
     current_frame_id = -1
     count_kf = 0
     start_time = time.time()
