@@ -45,7 +45,7 @@ class MySystem(object):
 
         pure_computing_start_time = time.time()
         if len(self.keyframes) >= 2 and self.local_window_size > 1:
-            windowed_averaging_vote(self.keyframes, 1)
+            windowed_averaging_vote(self.keyframes)
         pure_computing_end_time = time.time()
         self.current_keyframe = keyframe
         return pure_computing_end_time - pure_computing_start_time
