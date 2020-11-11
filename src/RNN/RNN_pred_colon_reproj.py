@@ -176,6 +176,8 @@ class RNN_depth_pred:
         # parts = image_name.split('/')
         # parts[-2] = parts[-2][:5]
         # image_name = '/'.join(parts)
+        image_name = image_name.replace('img_corr', 'image')
+        print('predict image %s' % image_name)
 
         self.curr_img = imageio.imread(image_name)
         self.curr_img = self.curr_img/255
@@ -250,6 +252,7 @@ class RNN_depth_pred:
         self.hidden_state_pose = self.new_hidden_state_pose
 
     def assign_keyframe_by_path(self,imagepath):
+        imagepath = imagepath.replace('img_corr', 'image')
         curr_img = imageio.imread(imagepath)
         curr_img = curr_img/255.     
         self.keyframe = curr_img
