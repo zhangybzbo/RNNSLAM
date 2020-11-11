@@ -4,8 +4,8 @@ PROJECT(${PROJECT_NAME})
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
 #set(CMAKE_VERBOSE_MAKEFILE ON)
 
-set(PYTHON_INCLUDE_DIR /playpen2/zhangyb/anaconda3/envs/tensorflow/include/python3.7m)
-set(PYTHON_LIBRARY /playpen2/zhangyb/anaconda3/envs/tensorflow/lib/libpython3.7m.so)
+set(PYTHON_INCLUDE_DIR /home/zhangyb/anaconda3/envs/tf/include/python3.8)
+set(PYTHON_LIBRARY /home/zhangyb/anaconda3/envs/tf/lib/libpython3.8.so)
 
 set(BUILD_TYPE Release)
 #set(BUILD_TYPE RelWithDebInfo)
